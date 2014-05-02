@@ -81,11 +81,42 @@ public:
 		
 		public:
 			__device__ __host__ MatrixRow(const Matrix &m, const unsigned int &x) : m_(m), x_(x) {}
+			
+			/*
+				WARNING
+				Prefer using .get(x, y)
+				for performances
+			*/
 			__device__ __host__ float& operator[](const unsigned int &y) const {
-				return m_. data_[x_ * m_.width_ + y];
+				return m_.data_[x_ * m_.width_ + y];
 			}
 	};
 	
+	/*
+		Return the ith element of the matrix
+		Equivalent to:
+			(*this)[row][col]
+		With:
+			row = i / width_
+			col = i % width_
+		
+		More efficient to retrieve an element
+		It avoids having to create an instance of MatrixRow
+		
+		(*this).get(x * width_ + y) is more efficient than (*this)[x][y]
+	*/
+	__device__ __host__ float& get(const unsigned int &i) const {
+		return data_[i];
+	}
+	
+	/*
+		More efficient than [][] to retrieve an element
+		(*this).get(x, y) is more efficient than (*this)[x][y]
+	*/
+	__device__ __host__ float& get(const unsigned int &i, const unsigned int &j) const {
+		return data_[i * width_ + j];
+	}
+		
 	__device__ __host__ MatrixRow operator[](const unsigned int &x) const {
 		return MatrixRow(*this, x);
 	}
@@ -98,7 +129,7 @@ public:
 		std::cout << "[" << std::endl;
 		for (unsigned int i(0) ; i != height_ ; i++) {
 			for (unsigned int j(0) ; j != width_ ; j++) {
-				std::cout << " " << (*this)[i][j];
+				std::cout << " " << this->get(i, j);
 			}
 			std::cout << std::endl;
 		}
@@ -165,6 +196,10 @@ public:
 			cudaMemset(data_, 0, size_ * sizeof(float));
 	}
 	
+	__device__ __host__ float& get(const unsigned int &x) const {
+		return data_[x];
+	}
+	
 	__device__ __host__ float& operator[](const unsigned int &x) const {
 		return data_[x];
 	}
@@ -190,10 +225,12 @@ public:
 Vector productMatrixVectorCPU(const Matrix &m, const Vector &v) {
 	Vector r(m.getHeight(), CPU);
 	
+	unsigned int id(0);
 	for (unsigned int i(0) ; i != m.getHeight() ; i++) {
 		r[i] = 0;
 		for (unsigned int j(0) ; j != m.getWidth() ; j++) {
-			r[i] += m[i][j] * v[j];
+			r[i] += m.get(id) * v[j]; //r[i] += m[i][j] * v[j];
+			id++;
 		}
 	}
 	return r;
@@ -206,7 +243,7 @@ __global__ void productMatrixVectorGPU_naive_kernel(const Matrix d_m, const Vect
 	if (i >= d_m.getHeight() || j >= d_m.getWidth())
 		return;
 	
-	atomicAdd(&d_r[i], d_m[i][j] * d_v[j]);
+	atomicAdd(&d_r[i], d_m.get(i, j) * d_v[j]);
 }
 
 /*
@@ -245,7 +282,7 @@ __global__ void productMatrixVectorGPU_shared_kernel(const Matrix d_m, const Vec
 	if (i >= d_m.getHeight() || j >= d_m.getWidth())
 		return;
 	
-	atomicAdd(&block_result[threadIdx.x], d_m[i][j] * d_v[j]);
+	atomicAdd(&block_result[threadIdx.x], d_m.get(i, j) * d_v[j]);
 	__syncthreads();
 	
 	if (threadIdx.y == 0)
