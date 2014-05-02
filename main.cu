@@ -334,9 +334,9 @@ int main(int argc, char **argv) {
 	
 	clock_t t_chrono;
 	t_chrono = clock();
-	/*for (int i(0) ; i != NUM_TESTS ; i++) {
+	for (int i(0) ; i != NUM_TESTS ; i++) {
 		productMatrixVectorCPU(h_m, h_v);
-	}*/
+	}
 	t_chrono = clock() - t_chrono;
 	std::cout << "Measured time for <CPU>: " << ((float) t_chrono)/CLOCKS_PER_SEC << "s" << std::endl;
 	
@@ -348,7 +348,7 @@ int main(int argc, char **argv) {
 	std::cout << "Measured time for <GPU naive>: " << ((float) t_chrono)/CLOCKS_PER_SEC << "s" << std::endl;
 	
 	t_chrono = clock();
-	for (int i(0) ; i != NUM_TESTS * 100 ; i++) {
+	for (int i(0) ; i != NUM_TESTS ; i++) {
 		productMatrixVectorGPU_shared(h_m, h_v);
 	}
 	t_chrono = clock() - t_chrono;
