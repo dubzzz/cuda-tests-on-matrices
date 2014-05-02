@@ -239,7 +239,7 @@ __global__ void productMatrixVectorGPU_shared_kernel(const Matrix d_m, const Vec
 	Parallel implementation of Matrix-Vector product
 	for GPU
 	
-	Naïve implementation:
+	Shared implementation:
 		Checkboard partitioning
 		Shared memory
 	
