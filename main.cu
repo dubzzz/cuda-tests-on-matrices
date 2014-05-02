@@ -216,6 +216,50 @@ Vector productMatrixVectorGPU_naive(const Matrix &h_m, const Vector &h_v) {
 	return h_r;
 }
 
+__global__ void productMatrixVectorGPU_shared_kernel(const Matrix d_m, const Vector d_v, Vector d_r) {
+	extern __shared__ float block_result[]; // best value: blockDim.x
+	
+	block_result[threadIdx.x] = 0;
+	__syncthreads();
+	
+	int i = blockIdx.x * blockDim.x + threadIdx.x;
+	int j = blockIdx.y * blockDim.y + threadIdx.y;
+	
+	if (i >= d_m.getHeight() || j >= d_m.getWidth())
+		return;
+	
+	atomicAdd(&block_result[threadIdx.x], d_m[i][j] * d_v[j]);
+	__syncthreads();
+	
+	if (threadIdx.y == 0)
+		atomicAdd(&d_r[i], block_result[threadIdx.x]);
+}
+
+/*
+	Parallel implementation of Matrix-Vector product
+	for GPU
+	
+	Naïve implementation:
+		Checkboard partitioning
+		Shared memory
+	
+	TODO check: m.getWidth() = v.getSize()
+*/
+Vector productMatrixVectorGPU_shared(const Matrix &h_m, const Vector &h_v) {
+	Matrix d_m(h_m, GPU);
+	Vector d_v(h_v, GPU);
+	
+	Vector d_r(h_m.getHeight(), GPU);
+	d_r.memsetZero();
+	
+	const dim3 num_threads(CHECKBOARD_BLOCK_MAX_HEIGHT, CHECKBOARD_BLOCK_MAX_WIDTH, 1);
+	const dim3 num_blocks((d_m.getHeight() + CHECKBOARD_BLOCK_MAX_HEIGHT -1)/CHECKBOARD_BLOCK_MAX_HEIGHT, (d_m.getWidth() + CHECKBOARD_BLOCK_MAX_WIDTH -1)/CHECKBOARD_BLOCK_MAX_WIDTH, 1);
+	productMatrixVectorGPU_shared_kernel<<<num_blocks, num_threads, CHECKBOARD_BLOCK_MAX_HEIGHT>>>(d_m, d_v, d_r);
+	
+	Vector h_r(d_r, CPU);
+	return h_r;
+}
+
 int main(int argc, char **argv) {
 	srand(time(NULL));
 	
@@ -236,19 +280,24 @@ int main(int argc, char **argv) {
 	clock_t t_chrono;
 	t_chrono = clock();
 	for (int i(0) ; i != NUM_TESTS ; i++) {
-		Vector h_r_cpu = productMatrixVectorCPU(h_m, h_v);
-		//h_r_cpu.print();
+		productMatrixVectorCPU(h_m, h_v);
 	}
 	t_chrono = clock() - t_chrono;
 	std::cout << "Measured time for <CPU>: " << ((float) t_chrono)/CLOCKS_PER_SEC << "s" << std::endl;
 	
 	t_chrono = clock();
 	for (int i(0) ; i != NUM_TESTS ; i++) {
-		Vector h_r_gpu = productMatrixVectorGPU_naive(h_m, h_v);
-		//h_r_gpu.print();
+		productMatrixVectorGPU_naive(h_m, h_v);
 	}
 	t_chrono = clock() - t_chrono;
-	std::cout << "Measured time for <GPU>: " << ((float) t_chrono)/CLOCKS_PER_SEC << "s" << std::endl;
+	std::cout << "Measured time for <GPU naive>: " << ((float) t_chrono)/CLOCKS_PER_SEC << "s" << std::endl;
+	
+	t_chrono = clock();
+	for (int i(0) ; i != NUM_TESTS ; i++) {
+		productMatrixVectorGPU_shared(h_m, h_v);
+	}
+	t_chrono = clock() - t_chrono;
+	std::cout << "Measured time for <GPU shared>: " << ((float) t_chrono)/CLOCKS_PER_SEC << "s" << std::endl;
 	
 	return 0;
 }
