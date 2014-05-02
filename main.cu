@@ -19,22 +19,26 @@ private:
 	const unsigned int width_;
 	const unsigned int height_;
 	const bool isCPU_;
-	const bool isOriginal_;
 	
+	int *smart_ptr_counter_; // num of instances of Matrix which share data_
 	float *data_;
 
 public:
 	
-	Matrix(const unsigned int &width, const unsigned int &height, const bool &isCPU) : width_(width), height_(height), isCPU_(isCPU), isOriginal_(true) {
+	Matrix(const unsigned int &width, const unsigned int &height, const bool &isCPU) : width_(width), height_(height), isCPU_(isCPU) {
+		smart_ptr_counter_ = new int(1);
 		if (isCPU_)
 			data_ = new float[width_ * height_];
 		else
 			cudaMalloc(&data_, width_ * height_ * sizeof(float));
 	}
 	
-	Matrix(const Matrix &m) : width_(m.width_), height_(m.height_), data_(m.data_), isCPU_(m.isCPU_), isOriginal_(false) {}
+	Matrix(const Matrix &m) : width_(m.width_), height_(m.height_), data_(m.data_), isCPU_(m.isCPU_), smart_ptr_counter_(m.smart_ptr_counter_) {
+		(*smart_ptr_counter_) += 1;
+	}
 	
-	Matrix(const Matrix &m, const bool &isCPU) : width_(m.width_), height_(m.height_), isCPU_(isCPU), isOriginal_(true) {
+	Matrix(const Matrix &m, const bool &isCPU) : width_(m.width_), height_(m.height_), isCPU_(isCPU) {
+		smart_ptr_counter_ = new int(1);
 		if (isCPU_) {
 			data_ = new float[width_ * height_];
 			if (m.isCPU_)
@@ -51,8 +55,12 @@ public:
 	}
 	
 	~Matrix() {
-		if (! isOriginal_)
+		if (*smart_ptr_counter_ > 1) {
+			(*smart_ptr_counter_) -= 1;
 			return;
+		}
+		
+		delete smart_ptr_counter_;
 		
 		if (isCPU_)
 			delete [] data_;
@@ -102,21 +110,25 @@ class Vector {
 private:
 	const unsigned int size_;
 	const bool isCPU_;
-	const bool isOriginal_;
 	
+	int *smart_ptr_counter_; // num of instances of Vector which share data_
 	float *data_;
 
 public:
-	Vector(const unsigned int &size, const bool &isCPU) : size_(size), isCPU_(isCPU), isOriginal_(true) {
+	Vector(const unsigned int &size, const bool &isCPU) : size_(size), isCPU_(isCPU) {
+		smart_ptr_counter_ = new int(1);
 		if (isCPU_)
 			data_ = new float[size_];
 		else
 			cudaMalloc(&data_, size_ * sizeof(float));
 	}
 	
-	Vector(const Vector &v) : size_(v.size_), data_(v.data_), isCPU_(v.isCPU_), isOriginal_(false) {}
+	Vector(const Vector &v) : size_(v.size_), data_(v.data_), isCPU_(v.isCPU_), smart_ptr_counter_(v.smart_ptr_counter_) {
+		(*smart_ptr_counter_) += 1;
+	}
 	
-	Vector(const Vector &v, const bool &isCPU) : size_(v.size_), isCPU_(isCPU), isOriginal_(true) {
+	Vector(const Vector &v, const bool &isCPU) : size_(v.size_), isCPU_(isCPU) {
+		smart_ptr_counter_ = new int(1);
 		if (isCPU_) {
 			data_ = new float[size_];
 			if (v.isCPU_)
@@ -133,8 +145,13 @@ public:
 	}
 	
 	~Vector() {
-		if(! isOriginal_) // cuda-kernel constructs a copy of the object and then call its destructor
+		if(*smart_ptr_counter_ > 1) {// cuda-kernel constructs a copy of the object and then call its destructor
+			(*smart_ptr_counter_) -= 1;
 			return;
+		}
+		
+		delete smart_ptr_counter_;
+		
 		if (isCPU_)
 			delete [] data_;
 		else
