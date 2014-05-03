@@ -84,7 +84,7 @@ public:
 				for performances
 			*/
 			__device__ __host__ float& operator[](const unsigned int &y) const {
-				return m_.data_[x_ * m_.width_ + y];
+				return m_.data_[x_ + m_.height_ * y];
 			}
 	};
 	
@@ -93,13 +93,13 @@ public:
 		Equivalent to:
 			(*this)[row][col]
 		With:
-			row = i / width_
-			col = i % width_
+			row = i % height_
+			col = i / height_
 		
 		More efficient to retrieve an element
 		It avoids having to create an instance of MatrixRow
 		
-		(*this).get(x * width_ + y) is more efficient than (*this)[x][y]
+		(*this).get(x  + height_ * y) is more efficient than (*this)[x][y]
 	*/
 	__device__ __host__ float& get(const unsigned int &i) const {
 		return data_[i];
@@ -110,7 +110,7 @@ public:
 		(*this).get(x, y) is more efficient than (*this)[x][y]
 	*/
 	__device__ __host__ float& get(const unsigned int &i, const unsigned int &j) const {
-		return data_[i * width_ + j];
+		return data_[i + height_ * j];
 	}
 		
 	__device__ __host__ MatrixRow operator[](const unsigned int &x) const {
@@ -123,8 +123,8 @@ public:
 	
 	void print() {
 		std::cout << "[" << std::endl;
-		for (unsigned int i(0) ; i != height_ ; i++) {
-			for (unsigned int j(0) ; j != width_ ; j++) {
+		for (unsigned int j(0) ; j != width_ ; j++) {
+			for (unsigned int i(0) ; i != height_ ; i++) {
 				std::cout << " " << this->get(i, j);
 			}
 			std::cout << std::endl;

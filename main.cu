@@ -13,6 +13,8 @@
 #define CHECKBOARD_BLOCK_MAX_WIDTH  1
 #define CHECKBOARD_BLOCK_MAX_HEIGHT 256
 
+#define MAX_NUM_THREADS 256
+
 /*
 	Serial implementation of Matrix-Vector product
 	for CPU
@@ -22,10 +24,11 @@
 Vector productMatrixVectorCPU(const Matrix &m, const Vector &v) {
 	Vector r(m.getHeight(), CPU);
 	
+	r.memsetZero();
+	
 	unsigned int id(0);
-	for (unsigned int i(0) ; i != m.getHeight() ; i++) {
-		r[i] = 0;
-		for (unsigned int j(0) ; j != m.getWidth() ; j++) {
+	for (unsigned int j(0) ; j != m.getWidth() ; j++) {
+		for (unsigned int i(0) ; i != m.getHeight() ; i++) {
 			r[i] += m.get(id) * v[j]; //r[i] += m[i][j] * v[j];
 			id++;
 		}
@@ -76,7 +79,8 @@ Vector productMatrixVectorGPU_naive(const Matrix &h_m, const Vector &h_v) throw 
 }
 
 __global__ void productMatrixVectorGPU_shared_kernel(const Matrix d_m, const Vector d_v, Vector d_r) {
-	extern __shared__ float block_result[]; // need: blockDim.x + blockDim.y
+	// Each block deals with only one vector element
+	__shared__ float vector_element;
 	
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	int j = blockIdx.y * blockDim.y + threadIdx.y;
@@ -84,15 +88,10 @@ __global__ void productMatrixVectorGPU_shared_kernel(const Matrix d_m, const Vec
 	if (i >= d_m.getHeight() || j >= d_m.getWidth())
 		return;
 	
-	block_result[threadIdx.x] = 0;
-	block_result[blockDim.x + threadIdx.y] = d_v[j];
+	vector_element = d_v[j];
 	__syncthreads();
 	
-	atomicAdd(&block_result[threadIdx.x], d_m.get(i, j) * block_result[blockDim.x + threadIdx.y]);
-	__syncthreads();
-	
-	if (threadIdx.y == 0)
-		atomicAdd(&d_r[i], block_result[threadIdx.x]);
+	atomicAdd(&d_r[i], d_m.get(i, j) * vector_element);
 }
 
 /*
@@ -112,10 +111,9 @@ Vector productMatrixVectorGPU_shared(const Matrix &h_m, const Vector &h_v) throw
 	Vector d_r(h_m.getHeight(), GPU);
 	d_r.memsetZero();
 	
-	const dim3 num_threads(CHECKBOARD_BLOCK_MAX_HEIGHT, CHECKBOARD_BLOCK_MAX_WIDTH, 1);
-	const dim3 num_blocks((d_m.getHeight() + CHECKBOARD_BLOCK_MAX_HEIGHT -1)/CHECKBOARD_BLOCK_MAX_HEIGHT, (d_m.getWidth() + CHECKBOARD_BLOCK_MAX_WIDTH -1)/CHECKBOARD_BLOCK_MAX_WIDTH, 1);
-	const unsigned int SHARED_MEMORY_SIZE((CHECKBOARD_BLOCK_MAX_HEIGHT + CHECKBOARD_BLOCK_MAX_WIDTH) * sizeof(float));
-	productMatrixVectorGPU_shared_kernel<<<num_blocks, num_threads, SHARED_MEMORY_SIZE>>>(d_m, d_v, d_r);
+	const dim3 num_threads(MAX_NUM_THREADS, 1, 1);
+	const dim3 num_blocks((d_m.getHeight() + MAX_NUM_THREADS -1)/MAX_NUM_THREADS, d_m.getWidth(), 1);
+	productMatrixVectorGPU_shared_kernel<<<num_blocks, num_threads>>>(d_m, d_v, d_r);
 	cudaThreadSynchronize(); // block until the device is finished
 	
 	// check for error
@@ -182,10 +180,10 @@ bool checkResultsProductMatrixVector(Vector(*model)(const Matrix &, const Vector
 }
 
 void measureProductMatrixVector(Vector(*func)(const Matrix &, const Vector &)) {
-	std::cout << "NEW MEASUREMENTS for Matrix-Vector product:" << std::endl;
+	std::cout << "NEW MEASUREMENTS for Matrix-Vector product: " << std::endl;
 	
 	unsigned long int LAST_NUM_TESTS(MINI_NUM_TESTS);
-	for (unsigned int size(2) ; size < 2049 ; size <<= 1) {
+	for (unsigned int size(2) ; size < 10000 ; size <<= 1) {
 		Matrix h_m(size, size, CPU);
 		randMatrix(h_m);
 		
