@@ -166,9 +166,7 @@ __global__ void productMatrixVectorGPU_row_kernel(const Matrix d_m, const Vector
 Vector productMatrixVectorGPU_row(const Matrix &h_m, const Vector &h_v) throw (cudaError_t) {
 	Matrix d_m(h_m, GPU);
 	Vector d_v(h_v, GPU);
-	
 	Vector d_r(h_m.getHeight(), GPU);
-	d_r.memsetZero();
 	
 	const dim3 num_threads(MAX_NUM_THREADS, 1, 1);
 	const dim3 num_blocks((d_m.getHeight() + MAX_NUM_THREADS -1)/MAX_NUM_THREADS, 1, 1);
