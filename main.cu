@@ -1,7 +1,4 @@
-#include <stdio.h>
-#include <string.h>
 #include <iostream>
-
 #include <time.h>
 #include <stdlib.h>
 
@@ -87,8 +84,6 @@ __global__ void productMatrixVectorGPU_shared_kernel(const Matrix d_m, const Vec
 	if (i >= d_m.getHeight() || j >= d_m.getWidth())
 		return;
 	
-	__syncthreads();
-		
 	block_result[threadIdx.x] = 0;
 	block_result[blockDim.x + threadIdx.y] = d_v[j];
 	__syncthreads();
