@@ -83,7 +83,7 @@ __global__ void productMatrixVectorGPU_shared_kernel(const Matrix d_m, const Vec
 	__shared__ float vector_element;
 	
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
-	int j = blockIdx.y * blockDim.y + threadIdx.y;
+	int j = blockIdx.y;
 	
 	if (i >= d_m.getHeight() || j >= d_m.getWidth())
 		return;
